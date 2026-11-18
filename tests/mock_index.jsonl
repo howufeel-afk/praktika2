@@ -1,2 +1,7 @@
-{"name":"app","vers":"1.0.0","deps":[{"name":"tokio","req":"^1.0","kind":"normal","optional":false},{"name":"serde","req":"^1.0","kind":"normal","optional":false},{"name":"tempfile","req":"^3.0","kind":"dev","optional":false}]}
-{"name":"app","vers":"1.1.0","deps":[{"name":"tokio","req":"^1.20","kind":"normal","optional":false}]}
+{"name":"app","vers":"1.0.0","deps":[{"name":"tokio","req":"^1.0.0","kind":"normal","optional":false},{"name":"serde","req":"^1.0.0","kind":"normal","optional":false},{"name":"tempfile","req":"^3.0.0","kind":"dev","optional":false}]}
+{"name":"app","vers":"1.1.0","deps":[{"name":"tokio","req":"^1.0.0","kind":"normal","optional":false}]}
+{"name":"tokio","vers":"1.0.0","deps":[{"name":"mio","req":"^0.8.0","kind":"normal","optional":false},{"name":"bytes","req":"^1.0.0","kind":"normal","optional":false}]}
+{"name":"serde","vers":"1.0.0","deps":[{"name":"serde_derive","req":"^1.0.0","kind":"normal","optional":true}]}
+{"name":"mio","vers":"0.8.0","deps":[{"name":"libc","req":"^0.2.0","kind":"normal","optional":false}]}
+{"name":"bytes","vers":"1.0.0","deps":[]}
+{"name":"libc","vers":"0.2.0","deps":[]}

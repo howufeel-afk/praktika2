@@ -1,92 +1,116 @@
 # Cargo Dependency Visualizer (Вариант 25)
 
-Инструмент визуализации графа зависимостей для пакетов Rust (Cargo), реализованный на стандартной библиотеке Python без использования сторонних менеджеров пакетов и библиотек.
+CLI-инструмент анализа и визуализации графа зависимостей пакетов Rust (Cargo), разработанный с использованием только стандартной библиотеки Python без сторонних библиотек и менеджеров пакетов.
 
 ## 1. Общее описание и структура проекта
 
-- `src/config.py` — модель конфигурации `AppConfig` и функции валидации параметров.
-- `src/cli.py` — парсер аргументов командной строки и вывод конфигурации в формате ключ-значение.
-- `src/cargo.py` — загрузка данных Cargo Sparse Index (`index.crates.io`) и парсер тестового репозитория.
-- `src/graph.py` — построение транзитивного графа зависимостей алгоритмом BFS без рекурсии с обработкой циклов и фильтрацией.
-- `src/main.py` — основная точка входа CLI-приложения.
-- `tests/` — модульные тесты (`unittest`) и тестовые графы (`mock_index.jsonl`, `repo_cycle.txt`, `repo_diamond.txt`).
+- `src/config.py` — модель конфигурации `AppConfig` и валидация всех 6 пользовательских параметров.
+- `src/cli.py` — парсер опций командной строки (`argparse`) и вывод параметров в формате `ключ: значение`.
+- `src/cargo.py` — извлечение прямых зависимостей в формате Cargo Sparse Index (`index.crates.io`) и парсер тестового репозитория.
+- `src/graph.py` — построение транзитивного графа зависимостей алгоритмом BFS без рекурсии с фильтрацией и защитой от циклов.
+- `src/main.py` — точка входа CLI-приложения (`py -m src.main`).
+- `tests/` — модульные тесты (`unittest`) и файлы тестовых репозиториев (`mock_index.jsonl`, `repo_cycle.txt`, `repo_diamond.txt`).
 - `run.bat`, `run.sh`, `Makefile` — скрипты запуска тестов и демонстрационных сценариев.
 
-## 2. Настраиваемые параметры (CLI-опции)
+## 2. Описание всех функций и настроек (опции командной строки)
 
-- `--package` — имя анализируемого пакета (обязательный).
-- `--version` — версия пакета в формате SemVer (обязательный).
-- `--repo` — URL-адрес репозитория или путь к файлу тестового репозитория (по умолчанию `https://index.crates.io`).
-- `--test-mode` — флаг включения режима работы с тестовым репозиторием.
-- `--output` — имя сгенерированного файла с изображением графа (по умолчанию `graph.png`).
-- `--filter` — подстрока для фильтрации пакетов (по умолчанию пустая).
+Приложение запускается через `py -m src.main` и принимает следующие параметры:
 
-## 3. Команды для сборки и запуска тестов
+- `--package` — имя анализируемого пакета (обязательный параметр).
+- `--version` — версия анализируемого пакета в формате SemVer `X.Y.Z` (обязательный параметр).
+- `--repo` — URL-адрес репозитория Cargo или путь к файлу тестового репозитория (по умолчанию `https://index.crates.io`).
+- `--test-mode` — флаг включения режима работы с локальным тестовым репозиторием.
+- `--output` — имя сгенерированного файла с изображением графа (`.png`, `.svg`, `.puml`, `.txt`; по умолчанию `graph.png`).
+- `--filter` — подстрока для исключения пакетов из анализа (по умолчанию пустая строка).
 
-Автоматический запуск всех 16 модульных тестов и демонстрационных сценариев (Windows):
+Справка по параметрам в консоли:
+```cmd
+py -m src.main --help
+```
+
+## 3. Команды для сборки проекта и запуска тестов
+
+Запуск всех тестов и демонстрационных примеров одним скриптом (Windows):
 ```cmd
 run.bat
 ```
 
-Запуск всех тестов вручную:
+Запуск всех 17 модульных тестов вручную:
 ```cmd
 py -m unittest discover -s tests -p "test_*.py"
 ```
 
-Запуск тестов по отдельным этапам:
-```cmd
-py -m unittest tests/test_cli.py
-py -m unittest tests/test_cargo.py
-py -m unittest tests/test_graph.py
-```
-
-## 4. Примеры использования (по этапам и пунктам задания)
+## 4. Примеры использования (команды CLI по этапам и пунктам задания)
 
 ### Этап 1. Минимальный прототип с конфигурацией
 
-**Пункт 3. Вывод всех настраиваемых параметров в формате ключ-значение:**
+**Пункты 1–3. Передача всех настраиваемых параметров через CLI и вывод в формате ключ-значение:**
 ```cmd
-py -c "from src.cli import parse_arguments, print_config_key_value; print_config_key_value(parse_arguments(['--package', 'serde', '--version', '1.0.104']))"
+py -m src.main --package app --version 1.0.0 --test-mode --repo tests/mock_index.jsonl --output my_graph.png --filter dev
 ```
 
-**Пункт 4. Демонстрация обработки ошибок для всех параметров:**
+**Пункт 4. Демонстрация обработки ошибок для каждого из 6 параметров:**
+
+1. Ошибка в имени пакета (`--package`):
 ```cmd
 py -m src.main --package "123!bad" --version 1.0.0
+```
+2. Ошибка в версии пакета (`--version`):
+```cmd
 py -m src.main --package serde --version latest
+```
+3. Ошибка в URL-адресе репозитория (`--repo`):
+```cmd
 py -m src.main --package serde --version 1.0.0 --repo ftp://wrong.url
-py -m src.main --package serde --version 1.0.0 --test-mode --repo no_file.txt
+```
+4. Ошибка в режиме тестового репозитория (`--test-mode` с несуществующим файлом):
+```cmd
+py -m src.main --package serde --version 1.0.0 --test-mode --repo missing_repo.txt
+```
+5. Ошибка в имени выходного файла графа (`--output` с недопустимым расширением):
+```cmd
 py -m src.main --package serde --version 1.0.0 --output graph.exe
 ```
-
-### Этап 2. Сбор данных
-
-**Пункты 2–4. Извлечение и вывод прямых зависимостей заданной версии (офлайн мок-файл и онлайн `crates.io`):**
+6. Ошибка в подстроке фильтрации (`--filter` с недопустимыми символами):
 ```cmd
-py -c "from src.cargo import get_crate_dependencies; print('\n'.join(f'- {d.name} ({d.requirement})' for d in get_crate_dependencies('tests/mock_index.jsonl', 'app', '1.0.0', True)))"
-py -c "from src.cargo import get_crate_dependencies; print('\n'.join(f'- {d.name} ({d.requirement})' for d in get_crate_dependencies('https://index.crates.io', 'serde', '1.0.104', False)))"
+py -m src.main --package serde --version 1.0.0 --filter "bad filter!"
 ```
 
-### Этап 3. Основные операции (BFS без рекурсии)
+### Этап 2. Сбор данных (формат пакетов Rust / Cargo)
 
-**Пункт 2. Фильтрация пакетов по подстроке (`--filter`):**
+**Пункты 1–4. Извлечение и вывод на экран прямых зависимостей заданной версии пакета:**
+
+Работа с пакетами формата Cargo на локальном слепке индекса (версия `1.0.0` и версия `1.1.0`):
+```cmd
+py -m src.main --package app --version 1.0.0 --test-mode --repo tests/mock_index.jsonl
+py -m src.main --package app --version 1.1.0 --test-mode --repo tests/mock_index.jsonl
+```
+
+Работа с реальным онлайн-репозиторием Rust (`https://index.crates.io`):
+```cmd
+py -m src.main --package serde_json --version 1.0.100 --repo https://index.crates.io
+py -m src.main --package quote --version 1.0.35 --repo https://index.crates.io
+```
+
+### Этап 3. Основные операции (транзитивный граф, BFS без рекурсии)
+
+**Пункт 1 и 4. Построение графа зависимостей алгоритмом BFS без рекурсии на тестовом репозитории (заглавные латинские буквы):**
+```cmd
+py -m src.main --package A --version 1.0.0 --test-mode --repo tests/repo_diamond.txt
+```
+
+**Пункт 2. Фильтрация пакетов, имя которых содержит заданную пользователем подстроку (`--filter`):**
 ```cmd
 py -m src.main --package A --version 1.0.0 --test-mode --repo tests/repo_diamond.txt --filter TEST
 py -m src.main --package BTEST --version 1.0.0 --test-mode --repo tests/repo_diamond.txt --filter TEST
 ```
 
-**Пункт 3. Обработка циклических зависимостей:**
+**Пункт 3. Корректная обработка циклических зависимостей (`A -> B -> D -> A` и `C -> E -> C`):**
 ```cmd
 py -m src.main --package A --version 1.0.0 --test-mode --repo tests/repo_cycle.txt
 ```
 
-**Пункт 4. Режим тестирования (заглавные латинские буквы) и анализ реального пакета:**
+**Дополнительно — фильтрация на графе пакетов Cargo (`--filter mio` отсекает ветку `mio -> libc`):**
 ```cmd
-py -m src.main --package A --version 1.0.0 --test-mode --repo tests/repo_diamond.txt
-py -m src.main --package serde --version 1.0.104 --repo https://index.crates.io
-```
-
-### Проверка истории коммитов (Пункт 5 каждого этапа)
-
-```cmd
-git log --oneline
+py -m src.main --package app --version 1.0.0 --test-mode --repo tests/mock_index.jsonl --filter mio
 ```

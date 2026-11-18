@@ -33,7 +33,7 @@ def build_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         required=True,
-        help="Analyzed package version (e.g., 0.1.0).",
+        help="Analyzed package version (e.g., 1.0.0).",
     )
     parser.add_argument(
         "--output",
@@ -65,12 +65,11 @@ def parse_arguments(cli_args: Optional[List[str]] = None) -> AppConfig:
 
 
 def print_config_key_value(config: AppConfig) -> None:
-    """Print parsed parameters in key-value format."""
-    print("=== Configuration Parameters ===")
+    """Print parsed parameters in key-value format (Stage 1)."""
+    print("=== Stage 1: Configuration Parameters ===")
     print(f"package: {config.package_name}")
     print(f"repo: {config.repo_url_or_path}")
     print(f"test_mode: {config.test_mode}")
     print(f"version: {config.package_version}")
     print(f"output: {config.output_file}")
     print(f"filter: {config.filter_substring}")
-    print("================================")

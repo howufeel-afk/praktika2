@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
 import urllib.error
 import urllib.request
 
@@ -72,11 +72,32 @@ def load_test_index_data(file_path: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def filter_crate_jsonl_lines(
+    raw_index_lines: str, crate_name: Optional[str] = None
+) -> str:
+    """Filter JSONL lines belonging to a specific crate name."""
+    if not crate_name:
+        return raw_index_lines
+    target = crate_name.lower()
+    matched: List[str] = []
+    for line in raw_index_lines.strip().splitlines():
+        clean = line.strip()
+        if not clean:
+            continue
+        record = json.loads(clean)
+        if record.get("name", "").lower() == target:
+            matched.append(clean)
+    return "\n".join(matched)
+
+
 def parse_direct_dependencies(
-    raw_index_lines: str, target_version: str
+    raw_index_lines: str,
+    target_version: str,
+    crate_name: Optional[str] = None,
 ) -> List[CargoDependency]:
     """Parse JSON lines and return dependencies for matching version."""
-    for line in raw_index_lines.strip().splitlines():
+    filtered_lines = filter_crate_jsonl_lines(raw_index_lines, crate_name)
+    for line in filtered_lines.strip().splitlines():
         line_clean = line.strip()
         if not line_clean:
             continue
@@ -106,12 +127,15 @@ def extract_normal_deps(raw_deps: List[dict]) -> List[CargoDependency]:
 
 
 def resolve_latest_matching_version(
-    raw_index_lines: str, requirement: str
+    raw_index_lines: str,
+    requirement: str,
+    crate_name: Optional[str] = None,
 ) -> str:
     """Select newest non-yanked version matching requirement prefix."""
+    filtered = filter_crate_jsonl_lines(raw_index_lines, crate_name)
     prefix = re.sub(r"[^0-9.]", "", requirement.split(",")[0])
     versions: List[str] = []
-    for line in raw_index_lines.strip().splitlines():
+    for line in filtered.strip().splitlines():
         if not line.strip():
             continue
         record = json.loads(line)
@@ -120,9 +144,14 @@ def resolve_latest_matching_version(
 
     if not versions:
         raise ValueError("No available non-yanked versions found.")
-
+    if prefix in versions:
+        return prefix
     matching = [ver for ver in versions if ver.startswith(prefix)]
-    return matching[-1] if matching else versions[-1]
+    if matching:
+        return matching[-1]
+    major = prefix.split(".")[0] + "."
+    major_matching = [ver for ver in versions if ver.startswith(major)]
+    return major_matching[-1] if major_matching else versions[-1]
 
 
 def parse_test_graph_line(line: str) -> tuple:
@@ -172,7 +201,9 @@ def get_crate_dependencies(
     if test_mode:
         raw_data = load_test_index_data(repo_target)
         if repo_target.lower().endswith(".jsonl"):
-            return parse_direct_dependencies(raw_data, crate_version)
+            return parse_direct_dependencies(
+                raw_data, crate_version, crate_name
+            )
         graph = parse_test_repository_graph(raw_data)
         if crate_name not in graph:
             raise ValueError(f"Package '{crate_name}' not in test repo.")
@@ -182,4 +213,4 @@ def get_crate_dependencies(
         ]
 
     raw_data = fetch_remote_index_data(repo_target, crate_name)
-    return parse_direct_dependencies(raw_data, crate_version)
+    return parse_direct_dependencies(raw_data, crate_version, crate_name)

@@ -14,10 +14,12 @@ class TestCliConfiguration(unittest.TestCase):
             "--version", "1.0.104",
             "--repo", "https://index.crates.io",
             "--output", "deps.png",
+            "--filter", "test",
         ]
         cfg = parse_arguments(args)
         self.assertEqual(cfg.package_name, "serde")
         self.assertEqual(cfg.package_version, "1.0.104")
+        self.assertEqual(cfg.filter_substring, "test")
         self.assertFalse(cfg.test_mode)
 
     def test_invalid_package_name_format(self) -> None:
@@ -59,6 +61,16 @@ class TestCliConfiguration(unittest.TestCase):
             "--package", "tokio",
             "--version", "1.0.0",
             "--output", "graph.exe",
+        ]
+        with self.assertRaises(ValueError):
+            parse_arguments(args)
+
+    def test_invalid_filter_substring(self) -> None:
+        """Reject illegal special characters in filter substring."""
+        args = [
+            "--package", "tokio",
+            "--version", "1.0.0",
+            "--filter", "bad filter!",
         ]
         with self.assertRaises(ValueError):
             parse_arguments(args)

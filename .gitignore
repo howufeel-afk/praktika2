@@ -5,4 +5,7 @@ __pycache__/
 env/
 *.png
 *.svg
+*.zip
+.idea/
+.vscode/
 .DS_Store

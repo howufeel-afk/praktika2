@@ -6,8 +6,10 @@ import re
 import urllib.parse
 
 CRATE_NAME_PATTERN = r"^[a-zA-Z][a-zA-Z0-9_-]*$"
+FILTER_PATTERN = r"^[a-zA-Z0-9_-]*$"
 SEMVER_PATTERN = r"^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$"
 SUPPORTED_GRAPH_EXTS = (".png", ".svg", ".puml", ".txt")
+MIN_STEM_LENGTH = 1
 
 
 @dataclass(frozen=True)
@@ -44,7 +46,7 @@ def validate_repo_target(target: str, is_test_mode: bool) -> None:
         raise ValueError("Repository target cannot be empty.")
     if is_test_mode:
         path = Path(target)
-        if not path.exists():
+        if not path.is_file():
             raise ValueError(f"Test repo file not found: '{target}'.")
         return
 
@@ -52,17 +54,29 @@ def validate_repo_target(target: str, is_test_mode: bool) -> None:
     valid_schemes = ("http", "https", "file")
     if parsed.scheme not in valid_schemes:
         raise ValueError(f"Unsupported URL scheme in repo: '{target}'.")
+    if parsed.scheme in ("http", "https") and not parsed.netloc:
+        raise ValueError(f"Missing domain in repository URL: '{target}'.")
 
 
 def validate_output_file(output_path: str) -> None:
-    """Validate destination graph file extension."""
+    """Validate destination graph file name and extension."""
     if not output_path:
         raise ValueError("Output file name cannot be empty.")
-    if not any(
-        output_path.lower().endswith(ext) for ext in SUPPORTED_GRAPH_EXTS
-    ):
+    lower_name = output_path.lower()
+    if not any(lower_name.endswith(ext) for ext in SUPPORTED_GRAPH_EXTS):
         allowed = ", ".join(SUPPORTED_GRAPH_EXTS)
         raise ValueError(f"Output file must have extension: {allowed}.")
+    stem = Path(output_path).stem
+    if len(stem) < MIN_STEM_LENGTH:
+        raise ValueError("Output file name must have a non-empty base name.")
+
+
+def validate_filter_substring(filter_substring: str) -> None:
+    """Validate package filter substring contains allowed characters."""
+    if not re.match(FILTER_PATTERN, filter_substring):
+        raise ValueError(
+            f"Invalid characters in filter substring: '{filter_substring}'."
+        )
 
 
 def validate_config(config: AppConfig) -> None:
@@ -71,3 +85,4 @@ def validate_config(config: AppConfig) -> None:
     validate_version(config.package_version)
     validate_repo_target(config.repo_url_or_path, config.test_mode)
     validate_output_file(config.output_file)
+    validate_filter_substring(config.filter_substring)

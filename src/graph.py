@@ -32,18 +32,43 @@ def should_skip_package(package_name: str, filter_substring: str) -> bool:
     return filter_substring in package_name
 
 
+def create_jsonl_test_resolver(raw_jsonl: str) -> DependencyResolver:
+    """Build dependency resolver backed by local Cargo JSONL mock file."""
+
+    def resolve(crate_name: str, version_or_req: str) -> List[CargoDependency]:
+        """Resolve direct dependencies for crate from mock JSONL lines."""
+        try:
+            return parse_direct_dependencies(
+                raw_jsonl, version_or_req, crate_name
+            )
+        except ValueError:
+            matched_ver = resolve_latest_matching_version(
+                raw_jsonl, version_or_req, crate_name
+            )
+            return parse_direct_dependencies(
+                raw_jsonl, matched_ver, crate_name
+            )
+
+    return resolve
+
+
 def create_test_resolver(repo_path: str) -> DependencyResolver:
-    """Build dependency resolver backed by uppercase test graph file."""
+    """Build dependency resolver backed by test graph or mock JSONL file."""
     raw_text = load_test_index_data(repo_path)
+    if repo_path.lower().endswith(".jsonl"):
+        return create_jsonl_test_resolver(raw_text)
+
     test_graph = parse_test_repository_graph(raw_text)
+    if not test_graph:
+        raise ValueError("Test repository graph file is empty.")
 
     def resolve(crate_name: str, _version: str) -> List[CargoDependency]:
         """Return direct dependencies for node from parsed test graph."""
-        deps = test_graph.get(crate_name, [])
+        if crate_name not in test_graph:
+            raise ValueError(f"Package '{crate_name}' not in test repo.")
+        deps = test_graph[crate_name]
         return [CargoDependency(d, "*", False, "normal") for d in deps]
 
-    if not test_graph:
-        raise ValueError("Test repository graph file is empty.")
     return resolve
 
 
@@ -57,12 +82,16 @@ def create_live_resolver(repo_url: str) -> DependencyResolver:
             cache[crate_name] = fetch_remote_index_data(repo_url, crate_name)
         raw_index = cache[crate_name]
         try:
-            return parse_direct_dependencies(raw_index, version_or_req)
+            return parse_direct_dependencies(
+                raw_index, version_or_req, crate_name
+            )
         except ValueError:
             matched_ver = resolve_latest_matching_version(
-                raw_index, version_or_req
+                raw_index, version_or_req, crate_name
             )
-            return parse_direct_dependencies(raw_index, matched_ver)
+            return parse_direct_dependencies(
+                raw_index, matched_ver, crate_name
+            )
 
     return resolve
 
