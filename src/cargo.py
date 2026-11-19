@@ -16,6 +16,8 @@ CRATE_MIN_LEN_TWO = 2
 CRATE_MIN_LEN_THREE = 3
 UPPER_PACKAGE_PATTERN = r"^[A-Z]+$"
 KEY_VALUE_PARTS = 2
+CRATES_IO_API_BASE = "https://crates.io/api/v1/crates"
+REVERSE_DEPS_PAGE_SIZE = 10
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,40 @@ def fetch_remote_index_data(repo_url: str, crate_name: str) -> str:
         raise RuntimeError(
             f"Network error while connecting to index: {error.reason}"
         ) from error
+
+
+def fetch_remote_reverse_dependents(crate_name: str) -> List[str]:
+    """Fetch direct reverse dependent crate names from crates.io API."""
+    api_url = (
+        f"{CRATES_IO_API_BASE}/{crate_name}/reverse_dependencies"
+        f"?per_page={REVERSE_DEPS_PAGE_SIZE}"
+    )
+    req = urllib.request.Request(
+        api_url,
+        headers={"User-Agent": HTTP_USER_AGENT},
+    )
+    try:
+        with urllib.request.urlopen(
+            req, timeout=HTTP_TIMEOUT_SECONDS
+        ) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(
+            f"Failed to fetch reverse deps for '{crate_name}' "
+            f"(HTTP {error.code})"
+        ) from error
+    except urllib.error.URLError as error:
+        raise RuntimeError(
+            f"Network error fetching reverse deps: {error.reason}"
+        ) from error
+
+    deps = payload.get("dependencies", [])
+    names: List[str] = []
+    for item in deps:
+        crate_id = item.get("crate_id", "")
+        if crate_id and crate_id not in names:
+            names.append(crate_id)
+    return names
 
 
 def load_test_index_data(file_path: str) -> str:
@@ -152,6 +188,26 @@ def resolve_latest_matching_version(
     major = prefix.split(".")[0] + "."
     major_matching = [ver for ver in versions if ver.startswith(major)]
     return major_matching[-1] if major_matching else versions[-1]
+
+
+def parse_jsonl_full_graph(raw_jsonl: str) -> Dict[str, List[str]]:
+    """Build forward adjacency dictionary from all records in JSONL file."""
+    graph: Dict[str, List[str]] = {}
+    for line in raw_jsonl.strip().splitlines():
+        clean = line.strip()
+        if not clean:
+            continue
+        record = json.loads(clean)
+        pkg_name = record.get("name", "")
+        if not pkg_name:
+            continue
+        deps = extract_normal_deps(record.get("deps", []))
+        existing = graph.setdefault(pkg_name, [])
+        for dep in deps:
+            if dep.name not in existing:
+                existing.append(dep.name)
+            graph.setdefault(dep.name, [])
+    return graph
 
 
 def parse_test_graph_line(line: str) -> tuple:

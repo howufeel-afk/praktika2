@@ -7,13 +7,16 @@ from typing import Callable, Deque, Dict, FrozenSet, List, Set, Tuple
 from src.cargo import (
     CargoDependency,
     fetch_remote_index_data,
+    fetch_remote_reverse_dependents,
     load_test_index_data,
     parse_direct_dependencies,
+    parse_jsonl_full_graph,
     parse_test_repository_graph,
     resolve_latest_matching_version,
 )
 
 DependencyResolver = Callable[[str, str], List[CargoDependency]]
+LIVE_REVERSE_MAX_DEPTH = 2
 
 
 @dataclass(frozen=True)
@@ -30,6 +33,21 @@ def should_skip_package(package_name: str, filter_substring: str) -> bool:
     if not filter_substring:
         return False
     return filter_substring in package_name
+
+
+def invert_adjacency_graph(
+    forward_graph: Dict[str, List[str]]
+) -> Dict[str, List[str]]:
+    """Transpose forward dependency edges into reverse dependency map."""
+    reversed_map: Dict[str, List[str]] = {
+        node: [] for node in forward_graph
+    }
+    for parent, children in forward_graph.items():
+        for child in children:
+            dependents = reversed_map.setdefault(child, [])
+            if parent not in dependents:
+                dependents.append(parent)
+    return reversed_map
 
 
 def create_jsonl_test_resolver(raw_jsonl: str) -> DependencyResolver:
@@ -72,6 +90,28 @@ def create_test_resolver(repo_path: str) -> DependencyResolver:
     return resolve
 
 
+def create_test_reverse_resolver(repo_path: str) -> DependencyResolver:
+    """Build reverse dependency resolver from local test repository."""
+    raw_text = load_test_index_data(repo_path)
+    if repo_path.lower().endswith(".jsonl"):
+        forward_graph = parse_jsonl_full_graph(raw_text)
+    else:
+        forward_graph = parse_test_repository_graph(raw_text)
+
+    if not forward_graph:
+        raise ValueError("Test repository graph file is empty.")
+    reversed_graph = invert_adjacency_graph(forward_graph)
+
+    def resolve(crate_name: str, _version: str) -> List[CargoDependency]:
+        """Return packages that depend on crate_name."""
+        if crate_name not in reversed_graph:
+            raise ValueError(f"Package '{crate_name}' not in test repo.")
+        parents = reversed_graph[crate_name]
+        return [CargoDependency(p, "*", False, "normal") for p in parents]
+
+    return resolve
+
+
 def create_live_resolver(repo_url: str) -> DependencyResolver:
     """Build dependency resolver querying remote Cargo sparse index."""
     cache: Dict[str, str] = {}
@@ -92,6 +132,25 @@ def create_live_resolver(repo_url: str) -> DependencyResolver:
             return parse_direct_dependencies(
                 raw_index, matched_ver, crate_name
             )
+
+    return resolve
+
+
+def create_live_reverse_resolver() -> DependencyResolver:
+    """Build bounded reverse resolver querying crates.io API."""
+    depths: Dict[str, int] = {}
+
+    def resolve(crate_name: str, _version: str) -> List[CargoDependency]:
+        """Fetch reverse dependents up to bounded depth."""
+        current_depth = depths.setdefault(crate_name, 0)
+        if current_depth >= LIVE_REVERSE_MAX_DEPTH:
+            return []
+        dependents = fetch_remote_reverse_dependents(crate_name)
+        for dep in dependents:
+            depths.setdefault(dep, current_depth + 1)
+        return [
+            CargoDependency(dep, "*", False, "normal") for dep in dependents
+        ]
 
     return resolve
 

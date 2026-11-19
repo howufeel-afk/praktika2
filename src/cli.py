@@ -10,6 +10,30 @@ DEFAULT_OUTPUT_GRAPH = "graph.png"
 DEFAULT_FILTER_STRING = ""
 
 
+def add_mode_arguments(parser: argparse.ArgumentParser) -> None:
+    """Attach mode and filter flags to CLI argument parser."""
+    parser.add_argument(
+        "--test-mode",
+        action="store_true",
+        help="Enable local mock test repository mode.",
+    )
+    parser.add_argument(
+        "--output",
+        default=DEFAULT_OUTPUT_GRAPH,
+        help="Output graph file name.",
+    )
+    parser.add_argument(
+        "--filter",
+        default=DEFAULT_FILTER_STRING,
+        help="Substring for filtering ignored packages.",
+    )
+    parser.add_argument(
+        "--reverse",
+        action="store_true",
+        help="Find reverse dependencies for target package (Stage 4).",
+    )
+
+
 def build_cli_parser() -> argparse.ArgumentParser:
     """Construct CLI argument parser with variant 25 options."""
     parser = argparse.ArgumentParser(
@@ -26,25 +50,11 @@ def build_cli_parser() -> argparse.ArgumentParser:
         help="Crates index base URL or local test repo path.",
     )
     parser.add_argument(
-        "--test-mode",
-        action="store_true",
-        help="Enable local mock test repository mode.",
-    )
-    parser.add_argument(
         "--version",
         required=True,
         help="Analyzed package version (e.g., 1.0.0).",
     )
-    parser.add_argument(
-        "--output",
-        default=DEFAULT_OUTPUT_GRAPH,
-        help="Output graph file name.",
-    )
-    parser.add_argument(
-        "--filter",
-        default=DEFAULT_FILTER_STRING,
-        help="Substring for filtering ignored packages.",
-    )
+    add_mode_arguments(parser)
     return parser
 
 
@@ -59,6 +69,7 @@ def parse_arguments(cli_args: Optional[List[str]] = None) -> AppConfig:
         package_version=args.version,
         output_file=args.output,
         filter_substring=args.filter,
+        reverse_mode=args.reverse,
     )
     validate_config(config)
     return config
@@ -73,3 +84,4 @@ def print_config_key_value(config: AppConfig) -> None:
     print(f"version: {config.package_version}")
     print(f"output: {config.output_file}")
     print(f"filter: {config.filter_substring}")
+    print(f"reverse: {config.reverse_mode}")

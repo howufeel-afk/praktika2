@@ -22,6 +22,7 @@ class AppConfig:
     package_version: str
     output_file: str
     filter_substring: str
+    reverse_mode: bool = False
 
 
 def validate_package_name(name: str) -> None:

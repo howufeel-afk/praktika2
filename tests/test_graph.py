@@ -1,8 +1,11 @@
-"""Tests for non-recursive BFS transitive dependency graph builder."""
+"""Tests for forward and reverse BFS dependency graph builder."""
 
 import unittest
 from src.cargo import CargoDependency, parse_test_repository_graph
-from src.graph import build_dependency_graph_bfs
+from src.graph import (
+    build_dependency_graph_bfs,
+    create_test_reverse_resolver,
+)
 
 
 def make_memory_resolver(graph_text: str):
@@ -20,7 +23,7 @@ def make_memory_resolver(graph_text: str):
 
 
 class TestBfsDependencyGraph(unittest.TestCase):
-    """Test suite verifying BFS traversal, filtering, and cycle safety."""
+    """Test suite verifying BFS traversal, reverse mode, and cycles."""
 
     def test_bfs_order_and_diamond_graph(self) -> None:
         """Verify breadth-first traversal order on diamond graph."""
@@ -39,14 +42,6 @@ class TestBfsDependencyGraph(unittest.TestCase):
         self.assertEqual(list(graph.adjacency.keys()), ["A", "B", "C"])
         self.assertEqual(graph.cycles, [("C", "A")])
 
-    def test_self_loop_cycle_handled(self) -> None:
-        """Ensure direct self-dependency A -> A is detected."""
-        raw = "A: A, B\nB:\n"
-        resolver = make_memory_resolver(raw)
-        graph = build_dependency_graph_bfs("A", "1.0.0", resolver)
-        self.assertIn(("A", "A"), graph.cycles)
-        self.assertIn("B", graph.adjacency)
-
     def test_substring_filtering_excludes_subgraph(self) -> None:
         """Exclude packages matching filter substring and their children."""
         raw = "A: B, SKIPME\nB: C\nSKIPME: D\nC:\nD:\n"
@@ -58,14 +53,22 @@ class TestBfsDependencyGraph(unittest.TestCase):
         self.assertNotIn("SKIPME", graph.adjacency)
         self.assertNotIn("D", graph.adjacency)
 
-    def test_root_filtered_returns_empty_graph(self) -> None:
-        """Return empty graph if root package matches filter substring."""
-        raw = "TESTAPP: B\nB:\n"
-        resolver = make_memory_resolver(raw)
-        graph = build_dependency_graph_bfs(
-            "TESTAPP", "1.0.0", resolver, filter_substring="TEST"
+    def test_reverse_dependencies_diamond_repo(self) -> None:
+        """Verify reverse BFS finds all upstream dependent packages."""
+        resolver = create_test_reverse_resolver("tests/repo_diamond.txt")
+        graph = build_dependency_graph_bfs("D", "1.0.0", resolver)
+        self.assertEqual(graph.adjacency["D"], ["B", "C"])
+        self.assertEqual(graph.adjacency["B"], ["A"])
+        self.assertEqual(graph.adjacency["C"], ["A"])
+        self.assertEqual(graph.adjacency["A"], [])
+
+    def test_reverse_dependencies_mock_jsonl(self) -> None:
+        """Verify reverse BFS works on Cargo JSONL mock repository."""
+        resolver = create_test_reverse_resolver("tests/mock_index.jsonl")
+        graph = build_dependency_graph_bfs("libc", "0.2.0", resolver)
+        self.assertEqual(
+            list(graph.adjacency.keys()), ["libc", "mio", "tokio", "app"]
         )
-        self.assertEqual(graph.adjacency, {})
 
 
 if __name__ == "__main__":

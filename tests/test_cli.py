@@ -15,11 +15,13 @@ class TestCliConfiguration(unittest.TestCase):
             "--repo", "https://index.crates.io",
             "--output", "deps.png",
             "--filter", "test",
+            "--reverse",
         ]
         cfg = parse_arguments(args)
         self.assertEqual(cfg.package_name, "serde")
         self.assertEqual(cfg.package_version, "1.0.104")
         self.assertEqual(cfg.filter_substring, "test")
+        self.assertTrue(cfg.reverse_mode)
         self.assertFalse(cfg.test_mode)
 
     def test_invalid_package_name_format(self) -> None:
